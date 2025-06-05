@@ -7656,32 +7656,174 @@ var m$1 = reactDomExports;
   client.createRoot = m$1.createRoot;
   client.hydrateRoot = m$1.hydrateRoot;
 }
-const SelectedCartContext = reactExports.createContext(void 0);
-const SelectedCartProvider = ({ children }) => {
-  const [selectedCartItems, setSelectedCartItems] = reactExports.useState([]);
-  const updateSelectedCartItem = (cartItem, quantity) => {
-    setSelectedCartItems((prevItems) => {
-      const existingItemIndex = prevItems.findIndex((item) => item.id === cartItem.id);
-      if (existingItemIndex > -1) {
-        const updatedItems = [...prevItems];
-        updatedItems[existingItemIndex].quantity = quantity ?? 1;
-        return updatedItems;
+const API_BASE_URL = "http://techcourse-lv2-alb-974870821.ap-northeast-2.elb.amazonaws.com";
+const API_KEY = "c2FuZ2hlZTAxOnBhc3N3b3Jk";
+const defaultHeaders = {
+  Authorization: `Basic ${API_KEY}`,
+  "Content-Type": "application/json"
+};
+const httpClient = {
+  get: async (url) => {
+    const response = await fetch(`${API_BASE_URL}${url}`, {
+      method: "GET",
+      headers: defaultHeaders
+    });
+    if (!response.ok)
+      throw new Error(response.statusText);
+    return response.json();
+  },
+  post: async (url, body) => {
+    const response = await fetch(`${API_BASE_URL}${url}`, {
+      method: "POST",
+      headers: defaultHeaders,
+      body: JSON.stringify(body)
+    });
+    if (!response.ok)
+      throw new Error(response.statusText);
+    const contentType = response.headers.get("content-type");
+    if (contentType == null ? void 0 : contentType.includes("application/json")) {
+      return response.json();
+    }
+    return;
+  },
+  delete: async (url) => {
+    const response = await fetch(`${API_BASE_URL}${url}`, {
+      method: "DELETE",
+      headers: defaultHeaders
+    });
+    if (!response.ok)
+      throw new Error(response.statusText);
+  },
+  put: async (url, body) => {
+    const response = await fetch(`${API_BASE_URL}${url}`, {
+      method: "PUT",
+      headers: defaultHeaders,
+      body: JSON.stringify(body)
+    });
+    if (!response.ok)
+      throw new Error(response.statusText);
+    return response.json();
+  },
+  patch: async (url, body) => {
+    const response = await fetch(`${API_BASE_URL}${url}`, {
+      method: "PATCH",
+      headers: defaultHeaders,
+      body: JSON.stringify(body)
+    });
+    if (!response.ok)
+      throw new Error(response.statusText);
+    const contentType = response.headers.get("content-type");
+    if (contentType == null ? void 0 : contentType.includes("application/json")) {
+      return response.json();
+    }
+    return;
+  }
+};
+const getCartItems = () => {
+  return httpClient.get("/cart-items");
+};
+const updateCartItem = (cartItemId, quantity) => {
+  return httpClient.patch(`/cart-items/${cartItemId}`, {
+    quantity
+  });
+};
+const CartItemsContext = reactExports.createContext(void 0);
+const CartItemsProvider = ({ children }) => {
+  const [cartItems, setCartItems] = reactExports.useState([]);
+  const fetchCartItems = async () => {
+    try {
+      const response = await getCartItems();
+      setCartItems(response.content);
+    } catch (error) {
+      if (error instanceof Error) {
+        console.error("장바구니 아이템 조회 실패:", error.message);
+        alert("장바구니 아이템 조회에 실패했습니다. 다시 시도해주세요.");
       }
-      return [...prevItems, cartItem];
-    });
+    }
   };
-  const removeSelectedCartItem = (cartItem) => {
-    setSelectedCartItems((prevItems) => {
-      return prevItems.filter((item) => item.id !== cartItem.id);
-    });
+  reactExports.useEffect(() => {
+    fetchCartItems();
+  }, []);
+  const increaseCartItemQuantity = async (cartItemId) => {
+    try {
+      const targetCartItem = cartItems.find((item) => item.id === cartItemId);
+      if (!targetCartItem)
+        return;
+      await updateCartItem(cartItemId, targetCartItem.quantity + 1);
+      await fetchCartItems();
+    } catch (error) {
+      if (error instanceof Error) {
+        console.error("장바구니 아이템 수량 업데이트 실패:", error.message);
+        alert("장바구니 아이템 수량 업데이트에 실패했습니다. 다시 시도해주세요.");
+      }
+    }
   };
-  const addAllCartItemsInSelected = (cartItems) => {
-    setSelectedCartItems(cartItems);
+  const decreaseCartItemQuantity = async (cartItemId) => {
+    try {
+      const targetCartItem = cartItems.find((item) => item.id === cartItemId);
+      if (!targetCartItem)
+        return;
+      await updateCartItem(cartItemId, targetCartItem.quantity - 1);
+      await fetchCartItems();
+    } catch (error) {
+      if (error instanceof Error) {
+        console.error("장바구니 아이템 수량 업데이트 실패:", error.message);
+        alert("장바구니 아이템 수량 업데이트에 실패했습니다. 다시 시도해주세요.");
+      }
+    }
   };
   return /* @__PURE__ */ jsxRuntimeExports.jsx(
-    SelectedCartContext.Provider,
+    CartItemsContext.Provider,
     {
-      value: { selectedCartItems, updateSelectedCartItem, addAllCartItemsInSelected, removeSelectedCartItem },
+      value: { cartItems, fetchCartItems, increaseCartItemQuantity, decreaseCartItemQuantity },
+      children
+    }
+  );
+};
+const useCartItemsContext = () => {
+  const context = reactExports.useContext(CartItemsContext);
+  if (!context) {
+    throw new Error("useCartItemsProvider must be used within a CartItemsProvider");
+  }
+  return context;
+};
+const SelectedCartItemsContext = reactExports.createContext(void 0);
+const SelectedCartItemsProvider = ({ children }) => {
+  const { cartItems } = useCartItemsContext();
+  const [SelectedCartItems, setSelectedCartItems] = reactExports.useState([]);
+  const [init, setInit] = reactExports.useState(false);
+  reactExports.useEffect(() => {
+    if (!init && cartItems.length > 0) {
+      setSelectedCartItems(cartItems);
+      setInit(true);
+    }
+  }, [cartItems, init]);
+  reactExports.useEffect(() => {
+    setSelectedCartItems(
+      (prev2) => prev2.map((selectedItem) => {
+        const updatedItem = cartItems.find((item) => item.id === selectedItem.id);
+        return updatedItem ? updatedItem : selectedItem;
+      })
+    );
+  }, [cartItems]);
+  const addSelectedCartItem = (cartItem) => {
+    setSelectedCartItems((prevItems) => [...prevItems, cartItem]);
+  };
+  const removeSelectedCartItem = (cartItem) => {
+    setSelectedCartItems((prevItems) => prevItems.filter((item) => item.id !== cartItem.id));
+  };
+  const addAllCartItemsInSelected = (cartItems2) => {
+    setSelectedCartItems(cartItems2);
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    SelectedCartItemsContext.Provider,
+    {
+      value: {
+        SelectedCartItems,
+        addSelectedCartItem,
+        addAllCartItemsInSelected,
+        removeSelectedCartItem
+      },
       children
     }
   );
@@ -7840,7 +7982,7 @@ function isDate(val) {
   return __toString.call(val) === "[object Date]";
 }
 /**
- * react-router v7.6.1
+ * react-router v7.6.2
  *
  * Copyright (c) Remix Software Inc.
  *
@@ -13137,7 +13279,7 @@ function mergeRefs(...refs) {
 var isBrowser$1 = typeof window !== "undefined" && typeof window.document !== "undefined" && typeof window.document.createElement !== "undefined";
 try {
   if (isBrowser$1) {
-    window.__reactRouterVersion = "7.6.1";
+    window.__reactRouterVersion = "7.6.2";
   }
 } catch (e2) {
 }
@@ -15112,14 +15254,14 @@ function NotFoundPage() {
     /* @__PURE__ */ jsxRuntimeExports.jsx(HomeLink, { to: "/", children: "홈으로 돌아가기" })
   ] });
 }
-const AppContainer = newStyled.div`
+const CartPageContainer = newStyled.div`
   width: 100%;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
 `;
-const AppContent = newStyled.main`
+const CartPageContent = newStyled.main`
   width: 100%;
   flex: 1;
   display: flex;
@@ -15149,7 +15291,7 @@ function CartHeader({ cartTypeQuantity }) {
   ] });
 }
 function SelectInput({ ...rest }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(SelectInputBox, { ...rest });
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(SelectInputBox, { type: "checkbox", ...rest });
 }
 const SelectInputBox = newStyled.input`
   width: 24px;
@@ -15255,136 +15397,24 @@ const CartItemQuantityNumber = newStyled.div`
   font-size: 12px;
   font-weight: 500;
 `;
-const API_BASE_URL = "http://techcourse-lv2-alb-974870821.ap-northeast-2.elb.amazonaws.com";
-const API_KEY = "ZXVud29vLWxldmk6cGFzc3dvcmQ";
-const defaultHeaders = {
-  Authorization: `Basic ${API_KEY}`,
-  "Content-Type": "application/json"
-};
-const httpClient = {
-  get: async (url) => {
-    const response = await fetch(`${API_BASE_URL}${url}`, {
-      method: "GET",
-      headers: defaultHeaders
-    });
-    if (!response.ok)
-      throw new Error(response.statusText);
-    return response.json();
-  },
-  post: async (url, body) => {
-    const response = await fetch(`${API_BASE_URL}${url}`, {
-      method: "POST",
-      headers: defaultHeaders,
-      body: JSON.stringify(body)
-    });
-    if (!response.ok)
-      throw new Error(response.statusText);
-    const contentType = response.headers.get("content-type");
-    if (contentType == null ? void 0 : contentType.includes("application/json")) {
-      return response.json();
-    }
-    return;
-  },
-  delete: async (url) => {
-    const response = await fetch(`${API_BASE_URL}${url}`, {
-      method: "DELETE",
-      headers: defaultHeaders
-    });
-    if (!response.ok)
-      throw new Error(response.statusText);
-  },
-  put: async (url, body) => {
-    const response = await fetch(`${API_BASE_URL}${url}`, {
-      method: "PUT",
-      headers: defaultHeaders,
-      body: JSON.stringify(body)
-    });
-    if (!response.ok)
-      throw new Error(response.statusText);
-    return response.json();
-  },
-  patch: async (url, body) => {
-    const response = await fetch(`${API_BASE_URL}${url}`, {
-      method: "PATCH",
-      headers: defaultHeaders,
-      body: JSON.stringify(body)
-    });
-    if (!response.ok)
-      throw new Error(response.statusText);
-    const contentType = response.headers.get("content-type");
-    if (contentType == null ? void 0 : contentType.includes("application/json")) {
-      return response.json();
-    }
-    return;
-  }
-};
-const updateCartItem = (cartItemId, quantity) => {
-  return httpClient.patch(`/cart-items/${cartItemId}`, {
-    quantity
-  });
-};
-function CartItemQuantitySelector({
-  isSelected,
-  updateSelectedCartItem,
-  cartItem,
-  quantity,
-  setCartItems
-}) {
-  const [cartQuantity, setCartQuantity] = reactExports.useState(quantity);
-  reactExports.useEffect(() => {
-    updateToRecentCartItems({
-      setCartItems,
-      cartItem,
-      cartQuantity
-    });
-    if (isSelected) {
-      updateSelectedCartItem(cartItem, cartQuantity);
-    }
-    const handleCartItemQuantityUpdate = async () => {
-      try {
-        await updateCartItem(cartItem.id, cartQuantity);
-      } catch (error) {
-        if (error instanceof Error) {
-          console.error("장바구니 아이템 수량 업데이트 실패:", error.message);
-          alert("장바구니 아이템 수량 업데이트에 실패했습니다. 다시 시도해주세요.");
-        }
-      }
-    };
-    handleCartItemQuantityUpdate();
-  }, [cartQuantity]);
-  const handleQuantityMinus = () => {
-    if (cartQuantity > 1) {
-      setCartQuantity((prev2) => prev2 - 1);
-    }
-  };
-  const handleQuantityPlus = () => {
-    setCartQuantity((prev2) => prev2 + 1);
-  };
+function CartItemQuantitySelector({ cartItem }) {
+  const { increaseCartItemQuantity, decreaseCartItemQuantity } = useCartItemsContext();
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(CartItemQuantityContainer, { children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemQuantitySelectorButton, { onClick: handleQuantityMinus, children: "-" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemQuantityNumber, { "data-testid": "card-item-quantity", children: cartQuantity }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemQuantitySelectorButton, { onClick: handleQuantityPlus, children: "+" })
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      CartItemQuantitySelectorButton,
+      {
+        onClick: cartItem.quantity > 1 ? () => decreaseCartItemQuantity(cartItem.id) : void 0,
+        children: "-"
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemQuantityNumber, { "data-testid": "card-item-quantity", children: cartItem.quantity }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemQuantitySelectorButton, { onClick: () => increaseCartItemQuantity(cartItem.id), children: "+" })
   ] });
 }
-function updateToRecentCartItems({
-  setCartItems,
-  cartItem,
-  cartQuantity
-}) {
-  setCartItems((prevItems) => {
-    const existingItemIndex = prevItems.findIndex((item) => item.id === cartItem.id);
-    if (existingItemIndex > -1) {
-      const updatedItems = [...prevItems];
-      updatedItems[existingItemIndex].quantity = cartQuantity;
-      return updatedItems;
-    }
-    return [...prevItems, { ...cartItem, quantity: cartQuantity }];
-  });
-}
-const useSelectedCartContext = () => {
-  const context = reactExports.useContext(SelectedCartContext);
+const useSelectedCartItemsContext = () => {
+  const context = reactExports.useContext(SelectedCartItemsContext);
   if (!context) {
-    throw new Error("useSelectedCartContext must be used within a SelectedCartProvider");
+    throw new Error("useSelectedCartItemsContext must be used within a SelectedCartItemsProvider");
   }
   return context;
 };
@@ -15405,21 +15435,23 @@ const deleteButtonCSS = css`
     border-color: rgba(0, 0, 0, 0.2);
   }
 `;
-function CartItemCard({ cartItem, setCartItems }) {
-  const { selectedCartItems, updateSelectedCartItem, removeSelectedCartItem } = useSelectedCartContext();
-  const handleSelectedCartItemUpdate = (e2) => {
+function CartItemCard({ cartItem }) {
+  const { SelectedCartItems, addSelectedCartItem, removeSelectedCartItem } = useSelectedCartItemsContext();
+  const { fetchCartItems } = useCartItemsContext();
+  const handleSelectedCartItemsItemUpdate = (e2) => {
     const isChecked = e2.target.checked;
     if (!isChecked) {
       removeSelectedCartItem(cartItem);
       return;
     }
-    updateSelectedCartItem(cartItem, cartItem.quantity);
+    addSelectedCartItem(cartItem, cartItem.quantity);
   };
-  const isSelected = selectedCartItems.findIndex((item) => item.id === cartItem.id) === -1 ? false : true;
+  const isSelected = SelectedCartItems.find((item) => item.id === cartItem.id) !== void 0;
   const handleCartItemDelete = async () => {
     try {
       await deleteCartItem(cartItem.id);
       removeSelectedCartItem(cartItem);
+      await fetchCartItems();
     } catch (error) {
       if (error instanceof Error) {
         console.error("장바구니 아이템 삭제 실패:", error.message);
@@ -15429,7 +15461,7 @@ function CartItemCard({ cartItem, setCartItems }) {
   };
   return /* @__PURE__ */ jsxs(CartItemContainer, { "data-testid": "cart-item-card", children: [
     /* @__PURE__ */ jsxs(CartItemHeader, { children: [
-      /* @__PURE__ */ jsx2(SelectInput, { type: "checkbox", onChange: handleSelectedCartItemUpdate, checked: isSelected }),
+      /* @__PURE__ */ jsx2(SelectInput, { onChange: handleSelectedCartItemsItemUpdate, checked: isSelected }),
       /* @__PURE__ */ jsx2(Button, { title: "삭제", css: deleteButtonCSS, onClick: handleCartItemDelete })
     ] }),
     /* @__PURE__ */ jsxs(CartItemContent, { children: [
@@ -15453,16 +15485,7 @@ function CartItemCard({ cartItem, setCartItems }) {
             "원"
           ] })
         ] }),
-        /* @__PURE__ */ jsx2(
-          CartItemQuantitySelector,
-          {
-            quantity: cartItem.quantity,
-            cartItem,
-            isSelected,
-            updateSelectedCartItem,
-            setCartItems
-          }
-        )
+        /* @__PURE__ */ jsx2(CartItemQuantitySelector, { cartItem })
       ] })
     ] })
   ] });
@@ -15495,7 +15518,10 @@ const CartItemCardContainer = newStyled.div`
   flex-direction: column;
   gap: 12px;
 `;
-function CartList({ cartItems, setCartItems, addAllCartItemsInSelected }) {
+function CartList({ addAllCartItemsInSelected }) {
+  const { cartItems } = useCartItemsContext();
+  const { SelectedCartItems } = useSelectedCartItemsContext();
+  const isAllSelected = cartItems.length > 0 && SelectedCartItems.length === cartItems.length;
   const handleAllCartItemsInSelected = (e2) => {
     const isChecked = e2.target.checked;
     if (!isChecked) {
@@ -15506,10 +15532,10 @@ function CartList({ cartItems, setCartItems, addAllCartItemsInSelected }) {
   };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(CartListContainer, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs(AllSelectContainer, { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(SelectInput, { type: "checkbox", onChange: handleAllCartItemsInSelected }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(SelectInput, { checked: isAllSelected, onChange: handleAllCartItemsInSelected }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "전체 선택" })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemCardContainer, { children: cartItems.map((cartItem) => /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemCard, { cartItem, setCartItems }, cartItem.id)) })
+    /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemCardContainer, { children: cartItems.map((cartItem) => /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemCard, { cartItem }, cartItem.id)) })
   ] });
 }
 const OrderPriceSummaryContainer = newStyled.section`
@@ -15557,8 +15583,8 @@ const PriceBox = newStyled.span`
   font-size: 24px;
 `;
 function OrderPriceSummary() {
-  const { selectedCartItems } = useSelectedCartContext();
-  const totalPrice = selectedCartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
+  const { SelectedCartItems } = useSelectedCartItemsContext();
+  const totalPrice = SelectedCartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
   const deliveryFee = totalPrice >= 1e5 ? 0 : 3e3;
   const totalPurchasePrice = totalPrice + deliveryFee;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(OrderPriceSummaryContainer, { children: [
@@ -15627,7 +15653,7 @@ const ButtonCSS$1 = css`
   }
 `;
 function Footer({ cartItemQuantity }) {
-  const { selectedCartItems } = useSelectedCartContext();
+  const { SelectedCartItems } = useSelectedCartItemsContext();
   const navigate = useNavigate();
   const handleClick = () => {
     navigate(ROUTES.CONFIRMATION);
@@ -15638,7 +15664,7 @@ function Footer({ cartItemQuantity }) {
       onClick: handleClick,
       title: "주문 확인",
       css: ButtonCSS$1,
-      disabled: cartItemQuantity === 0 || selectedCartItems.length === 0
+      disabled: cartItemQuantity === 0 || SelectedCartItems.length === 0
     }
   ) });
 }
@@ -15649,9 +15675,6 @@ const FooterContainer = newStyled.footer`
   align-items: center;
   justify-content: center;
 `;
-const getCartItems = () => {
-  return httpClient.get("/cart-items");
-};
 function EmptyCartItemUI() {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(EmptyCartItemUIContainer, { children: "장바구니에 담은 상품이 없습니다." });
 }
@@ -15662,38 +15685,15 @@ const EmptyCartItemUIContainer = newStyled.section`
   justify-content: center;
   align-items: center;
 `;
-function App() {
-  const { addAllCartItemsInSelected, selectedCartItems } = useSelectedCartContext();
-  const [cartItems, setCartItems] = reactExports.useState([]);
-  reactExports.useEffect(() => {
-    const fetchCartItems = async () => {
-      try {
-        const response = await getCartItems();
-        if (!response)
-          return;
-        setCartItems(response.content);
-      } catch (error) {
-        if (error instanceof Error) {
-          console.error("Failed to fetch cart items:", error.message);
-          alert("장바구니 아이템을 불러오는 데 실패했습니다. 다시 시도해주세요.");
-        }
-      }
-    };
-    fetchCartItems();
-  }, [selectedCartItems]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs(AppContainer, { children: [
+function CartPage() {
+  const { addAllCartItemsInSelected } = useSelectedCartItemsContext();
+  const { cartItems } = useCartItemsContext();
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(CartPageContainer, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(Navbar, { title: "SHOP", url: ROUTES.ROOT }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(AppContent, { children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(CartPageContent, { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(CartHeader, { cartTypeQuantity: cartItems.length }),
       cartItems.length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          CartList,
-          {
-            cartItems,
-            setCartItems,
-            addAllCartItemsInSelected
-          }
-        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(CartList, { addAllCartItemsInSelected }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(OrderPriceSummary, {})
       ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx(EmptyCartItemUI, {})
     ] }),
@@ -15764,14 +15764,14 @@ const ButtonCSS = css`
   }
 `;
 function ConfirmationPage() {
-  const { selectedCartItems } = useSelectedCartContext();
+  const { SelectedCartItems } = useSelectedCartItemsContext();
   const navigate = useNavigate();
   const handleClick = () => {
     navigate(ROUTES.ROOT);
   };
-  const cartTypeQuantity = selectedCartItems.length;
-  const totalQuantity = selectedCartItems.reduce((acc, item) => acc + item.quantity, 0);
-  const totalPrice = selectedCartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
+  const cartTypeQuantity = SelectedCartItems.length;
+  const totalQuantity = SelectedCartItems.reduce((acc, item) => acc + item.quantity, 0);
+  const totalPrice = SelectedCartItems.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
   return /* @__PURE__ */ jsxs(ConfirmationContainer, { children: [
     /* @__PURE__ */ jsx2(Navbar, { title: "◀", url: ROUTES.CART }),
     /* @__PURE__ */ jsxs(ConfirmationSection, { children: [
@@ -15790,13 +15790,13 @@ function ConfirmationPage() {
         "원"
       ] })
     ] }),
-    /* @__PURE__ */ jsx2(ConfirmationFooterContainer, { children: /* @__PURE__ */ jsx2(Button, { onClick: handleClick, title: "결제하기", css: ButtonCSS, disabled: selectedCartItems.length === 0 }) })
+    /* @__PURE__ */ jsx2(ConfirmationFooterContainer, { children: /* @__PURE__ */ jsx2(Button, { onClick: handleClick, title: "결제하기", css: ButtonCSS, disabled: SelectedCartItems.length === 0 }) })
   ] });
 }
 const router = createBrowserRouter(
   createRoutesFromElements(
     /* @__PURE__ */ jsxRuntimeExports.jsxs(Route, { path: ROUTES.ROOT, element: /* @__PURE__ */ jsxRuntimeExports.jsx(Layout, {}), children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: ROUTES.CART, element: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: ROUTES.CART, element: /* @__PURE__ */ jsxRuntimeExports.jsx(CartPage, {}) }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: ROUTES.CONFIRMATION, element: /* @__PURE__ */ jsxRuntimeExports.jsx(ConfirmationPage, {}) }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "*", element: /* @__PURE__ */ jsxRuntimeExports.jsx(NotFoundPage, {}) })
     ] })
@@ -15807,7 +15807,7 @@ const router = createBrowserRouter(
 );
 async function enableMocking() {
   const isLocalhost = location.hostname === "localhost";
-  const { worker } = await __vitePreload(() => import("./browser-Dc042wEc.js"), true ? [] : void 0);
+  const { worker } = await __vitePreload(() => import("./browser-B_KVb_Ox.js"), true ? [] : void 0);
   return worker.start({
     serviceWorker: {
       url: isLocalhost ? "/mockServiceWorker.js" : "/react-shopping-cart/mockServiceWorker.js"
@@ -15817,6 +15817,6 @@ async function enableMocking() {
 }
 enableMocking().then(() => {
   client.createRoot(document.getElementById("root")).render(
-    /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(SelectedCartProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(RouterProvider, { router }) }) })
+    /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemsProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(SelectedCartItemsProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(RouterProvider, { router }) }) }) })
   );
 });
