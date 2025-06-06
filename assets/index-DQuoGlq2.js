@@ -13683,8 +13683,7 @@ function useViewTransitionState(to, opts = {}) {
 ]);
 const ROUTES = {
   ROOT: "/",
-  CONFIRMATION: "/confirmation",
-  CART: "/"
+  CONFIRMATION: "/confirmation"
 };
 function _extends() {
   _extends = Object.assign ? Object.assign.bind() : function(target) {
@@ -15796,7 +15795,7 @@ function ConfirmationPage() {
 const router = createBrowserRouter(
   createRoutesFromElements(
     /* @__PURE__ */ jsxRuntimeExports.jsxs(Route, { path: ROUTES.ROOT, element: /* @__PURE__ */ jsxRuntimeExports.jsx(Layout, {}), children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: ROUTES.CART, element: /* @__PURE__ */ jsxRuntimeExports.jsx(CartPage, {}) }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { index: true, element: /* @__PURE__ */ jsxRuntimeExports.jsx(CartPage, {}) }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: ROUTES.CONFIRMATION, element: /* @__PURE__ */ jsxRuntimeExports.jsx(ConfirmationPage, {}) }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "*", element: /* @__PURE__ */ jsxRuntimeExports.jsx(NotFoundPage, {}) })
     ] })
