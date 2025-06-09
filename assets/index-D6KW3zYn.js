@@ -12313,7 +12313,7 @@ const calculateBuyXGetYDiscount = (coupon, items) => {
   const eligibleItems = items.filter((item) => item.quantity >= setSize).sort((a, b) => b.product.price - a.product.price);
   if (eligibleItems.length === 0) return 0;
   const highestPriceItem = eligibleItems[0];
-  const freeItemCount = Math.floor(highestPriceItem.quantity / setSize);
+  const freeItemCount = Math.floor(highestPriceItem.quantity / setSize) * getQuantity;
   return highestPriceItem.product.price * freeItemCount;
 };
 const calculateShippingDiscount = (coupon, orderPrice, shippingFee) => {
@@ -12461,7 +12461,7 @@ const OrderProviderWrapper = ({ children }) => {
   const { SelectedCartItems } = useSelectedCartItemsContext();
   return /* @__PURE__ */ jsxRuntimeExports.jsx(OrderProvider, { selectedCartItems: SelectedCartItems, selectedCoupons, children });
 };
-const CartWithOrderProvider = ({ children }) => {
+const SelectedCartWithOrderProvider = ({ children }) => {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(SelectedCartItemsProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(OrderProviderWrapper, { children }) });
 };
 var dist = {};
@@ -19994,7 +19994,7 @@ function NotFoundPage() {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(ErrorContainer, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(Title, { children: "404" }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(Description, { children: "페이지를 찾을 수 없습니다." }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(HomeLink, { to: "/", children: "홈으로 돌아가기" })
+    /* @__PURE__ */ jsxRuntimeExports.jsx(HomeLink, { to: ROUTES.ROOT, children: "홈으로 돌아가기" })
   ] });
 }
 const CartPageContainer = newStyled.div`
@@ -20175,16 +20175,6 @@ const CartItemHeader$1 = newStyled.div`
   justify-content: space-between;
   margin: 12px 0;
 `;
-function Button({ title, ...rest }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(ButtonStyles, { ...rest, children: title });
-}
-const ButtonStyles = newStyled.button`
-  border: none;
-  cursor: pointer;
-`;
-const deleteCartItem = (cartItemId) => {
-  return httpClient.delete(`/cart-items/${cartItemId}`);
-};
 const deleteButtonCSS = css`
   width: 40px;
   height: 28px;
@@ -20199,9 +20189,20 @@ const deleteButtonCSS = css`
     border-color: rgba(0, 0, 0, 0.2);
   }
 `;
-function CartItemHeader({ cartItem }) {
-  const { SelectedCartItems, addSelectedCartItem, removeSelectedCartItem } = useSelectedCartItemsContext();
+function Button({ title, ...rest }) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(ButtonStyles, { ...rest, children: title });
+}
+const ButtonStyles = newStyled.button`
+  border: none;
+  cursor: pointer;
+`;
+const deleteCartItem = (cartItemId) => {
+  return httpClient.delete(`/cart-items/${cartItemId}`);
+};
+const useCartItemActions = (cartItem) => {
   const { fetchCartItems } = useCartItemsContext();
+  const { SelectedCartItems, addSelectedCartItem, removeSelectedCartItem } = useSelectedCartItemsContext();
+  const isSelected = SelectedCartItems.find((item) => item.id === cartItem.id) !== void 0;
   const handleSelectedCartItemsItemUpdate = (e2) => {
     const isChecked = e2.target.checked;
     if (!isChecked) {
@@ -20210,7 +20211,6 @@ function CartItemHeader({ cartItem }) {
     }
     addSelectedCartItem(cartItem, cartItem.quantity);
   };
-  const isSelected = SelectedCartItems.find((item) => item.id === cartItem.id) !== void 0;
   const handleCartItemDelete = async () => {
     try {
       await deleteCartItem(cartItem.id);
@@ -20223,6 +20223,14 @@ function CartItemHeader({ cartItem }) {
       }
     }
   };
+  return {
+    isSelected,
+    handleSelectedCartItemsItemUpdate,
+    handleCartItemDelete
+  };
+};
+function CartItemHeader({ cartItem }) {
+  const { isSelected, handleSelectedCartItemsItemUpdate, handleCartItemDelete } = useCartItemActions(cartItem);
   return /* @__PURE__ */ jsxs(CartItemHeader$1, { children: [
     /* @__PURE__ */ jsx2(SelectInput, { onChange: handleSelectedCartItemsItemUpdate, checked: isSelected }),
     /* @__PURE__ */ jsx2(Button, { title: "삭제", css: deleteButtonCSS, onClick: handleCartItemDelete })
@@ -20429,6 +20437,13 @@ const EmptyCartItemUIContainer = newStyled.section`
   justify-content: center;
   align-items: center;
 `;
+function NavFooter({ title, onClick, isDisabled }) {
+  return /* @__PURE__ */ jsx2(FooterContainer, { children: /* @__PURE__ */ jsx2(Button, { onClick, title, css: ButtonCSS$2, disabled: isDisabled }) });
+}
+const FooterContainer = newStyled.footer`
+  width: 100%;
+  height: 64px;
+`;
 const ButtonCSS$2 = css`
   width: 100%;
   height: 100%;
@@ -20445,13 +20460,6 @@ const ButtonCSS$2 = css`
     background-color: #bebebe;
     cursor: not-allowed;
   }
-`;
-function NavFooter({ title, onClick, isDisabled }) {
-  return /* @__PURE__ */ jsx2(FooterContainer, { children: /* @__PURE__ */ jsx2(Button, { onClick, title, css: ButtonCSS$2, disabled: isDisabled }) });
-}
-const FooterContainer = newStyled.footer`
-  width: 100%;
-  height: 64px;
 `;
 function CartPage() {
   const { addAllCartItemsInSelected, SelectedCartItems } = useSelectedCartItemsContext();
@@ -21772,8 +21780,32 @@ const CouponValidInfo = newStyled.span`
   font-size: 12px;
   font-weight: 500;
 `;
+const formatCouponExpirationDate = (expirationDate) => {
+  if (!expirationDate) return "";
+  const date = new Date(expirationDate);
+  return date.toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric"
+  });
+};
+const formatTime = (timeString) => {
+  const [hours] = timeString.split(":").map(Number);
+  const period = hours < 12 ? "오전" : "오후";
+  const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+  return `${period} ${displayHours}시`;
+};
+const formatCouponTimeRange = (coupon) => {
+  if (!coupon.availableTime) return null;
+  const start = formatTime(coupon.availableTime.start);
+  const end = formatTime(coupon.availableTime.end);
+  return `${start}부터 ${end}까지`;
+};
+const formatMinimumAmount = (amount) => {
+  if (!amount) return "";
+  return `${amount.toLocaleString()}원`;
+};
 function CouponCard({ coupon }) {
-  var _a;
   const { selectedCoupons, addCoupon, removeCoupon, canAddCoupon } = useCouponsContext();
   const { SelectedCartItems } = useSelectedCartItemsContext();
   const { totalPrice } = useOrderContext();
@@ -21789,24 +21821,6 @@ function CouponCard({ coupon }) {
       removeCoupon(coupon.id);
     }
   };
-  const expirationDate = new Date(coupon.expirationDate ?? "");
-  const formattedExpirationDate = expirationDate.toLocaleDateString("ko-KR", {
-    year: "numeric",
-    month: "long",
-    day: "numeric"
-  });
-  const formatTime = (timeString) => {
-    const [hours] = timeString.split(":").map(Number);
-    const period = hours < 12 ? "오전" : "오후";
-    const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-    return `${period} ${displayHours}시`;
-  };
-  const formatTimeRange = () => {
-    if (!coupon.availableTime) return null;
-    const start = formatTime(coupon.availableTime.start);
-    const end = formatTime(coupon.availableTime.end);
-    return `${start}부터 ${end}까지`;
-  };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(CouponCardContainer, { children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs(CouponCheckBox, { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(SelectInput, { checked: isSelected, onChange: handleCouponToggle, disabled: isDisabled }),
@@ -21815,16 +21829,15 @@ function CouponCard({ coupon }) {
     /* @__PURE__ */ jsxRuntimeExports.jsxs(CouponValidInfoContainer, { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs(CouponValidInfo, { children: [
         "만료일: ",
-        formattedExpirationDate
+        formatCouponExpirationDate(coupon.expirationDate)
       ] }),
       coupon.minimumAmount && /* @__PURE__ */ jsxRuntimeExports.jsxs(CouponValidInfo, { children: [
         "최소 주문 금액: ",
-        (_a = coupon.minimumAmount) == null ? void 0 : _a.toLocaleString(),
-        "원"
+        formatMinimumAmount(coupon.minimumAmount)
       ] }),
       coupon.availableTime && /* @__PURE__ */ jsxRuntimeExports.jsxs(CouponValidInfo, { children: [
         "사용 가능 시간: ",
-        formatTimeRange()
+        formatCouponTimeRange(coupon)
       ] })
     ] })
   ] });
@@ -21940,6 +21953,6 @@ async function enableMocking() {
 }
 enableMocking().then(() => {
   ReactDOM.createRoot(document.getElementById("root")).render(
-    /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemsProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(CouponsProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(CartWithOrderProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(RouterProvider, { router }) }) }) }) })
+    /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(CartItemsProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(CouponsProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(SelectedCartWithOrderProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(RouterProvider, { router }) }) }) }) })
   );
 });
